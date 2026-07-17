@@ -41,7 +41,10 @@ class CheckoutController extends Controller
     public function close(Request $request)
     {
         $request->validate(['closing_amount' => 'required|numeric']);
-        $caixa = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->firstOrFail();
+        $caixa = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->first();
+        
+        if (!$caixa) return redirect()->route('dashboard')->with('error', 'Nenhum caixa aberto encontrado.');
+        
         $caixa->update([
             'closing_amount' => $request->closing_amount,
             'status' => 'fechado',
@@ -52,14 +55,17 @@ class CheckoutController extends Controller
 
     public function withdrawView()
     {
-        $caixaAberto = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->firstOrFail();
+        $caixaAberto = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->first();
+        if (!$caixaAberto) return redirect()->route('dashboard')->with('error', 'Abra o caixa primeiro.');
         return view('company.checkout.cashdrop', compact('caixaAberto'));
     }
 
     public function withdraw(Request $request)
     {
         $request->validate(['amount' => 'required|numeric|min:0.01']);
-        $caixa = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->firstOrFail();
+        $caixa = CashRegister::where('user_id', Auth::id())->where('status', 'aberto')->first();
+        
+        if (!$caixa) return redirect()->route('dashboard')->with('error', 'Nenhum caixa aberto encontrado.');
 
         Sale::create([
             'cash_register_id' => $caixa->id,
@@ -82,7 +88,7 @@ class CheckoutController extends Controller
                                    ->first();
 
         if (!$caixaAberto) return redirect()->route('dashboard')->with('error', 'Abra o caixa.');
-        $products = $activeEvent->products;
+        $products = $activeEvent->products()->where('stock', '>', 0)->get();
         return view('company.checkout.sale', compact('caixaAberto', 'products'));
     }
 
@@ -94,7 +100,6 @@ class CheckoutController extends Controller
             'payment_method' => 'required',
         ]);
 
-        // Variável para armazenar o ID da venda fora do escopo da transação
         $saleId = null;
 
         DB::transaction(function () use ($request, &$saleId) {
@@ -140,7 +145,6 @@ class CheckoutController extends Controller
             $saleId = $sale->id;
         });
 
-        // Redireciona para a rota de impressão passando o ID da venda
         return redirect()->route('checkout.print', $saleId)->with('success', 'Venda realizada com sucesso!');
     }
 

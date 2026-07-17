@@ -175,23 +175,32 @@ class EventController extends Controller
         return back()->with('success', 'Funcionário removido do evento!');
     }
 
-    // MÉTODO DE RELATÓRIO CORRIGIDO
-    public function report($eventId)
+    public function report(Request $request, $id)
     {
-        $event = Event::with(['cashRegisters.sales.items.product'])->findOrFail($eventId);
+        $event = \App\Models\Event::findOrFail($id);
         
-        // Coleta todas as vendas através dos caixas do evento
-        $allSales = $event->cashRegisters->flatMap->sales;
+        // Datas para o filtro de período
+        $startDate = $request->input('start_date', now()->format('Y-m-d'));
+        $endDate = $request->input('end_date', now()->format('Y-m-d'));
 
-        $report = [
-            'total_dinheiro' => $allSales->where('payment_method', 'dinheiro')->sum('total_amount'),
-            'total_pix'      => $allSales->where('payment_method', 'pix')->sum('total_amount'),
-            'total_cartao'   => $allSales->where('payment_method', 'cartao')->sum('total_amount'),
-            'consumo_interno'=> $allSales->where('is_internal_consumption', true)
-                                         ->sum(fn($s) => $s->items->sum('total_price')),
-            'total_geral'    => $allSales->sum('total_amount')
-        ];
+        // 1. Relatório do Evento (Total acumulado)
+        // Pegamos apenas as vendas (total_amount > 0) ligadas aos caixas deste evento
+        $query = \App\Models\Sale::whereHas('cashRegister', function($q) use ($id) {
+            $q->where('event_id', $id);
+        })->where('total_amount', '>', 0); // Filtra apenas vendas positivas
 
-        return view('company.admin.report', compact('event', 'report'));
+        $eventSales = $query->get();
+        
+
+        // 2. Relatório Diário (Considera o evento atual e hoje)
+        $dailySales = $eventSales->where('created_at', '>=', now()->startOfDay());
+
+        // 3. Relatório por Período
+        $periodSales = $eventSales->whereBetween('created_at', [
+            $startDate . ' 00:00:00', 
+            $endDate . ' 23:59:59'
+        ]);
+
+        return view('company.admin.report', compact('event', 'eventSales', 'dailySales', 'periodSales', 'startDate', 'endDate'));
     }
 }

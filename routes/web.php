@@ -73,7 +73,8 @@ Route::middleware(['auth', 'check.active'])->group(function () {
     Route::get('/checkout/print/{sale}', [CheckoutController::class, 'print'])->name('checkout.print');
 
     //Rotas Relatórios
-    Route::get('/events/{id}/report', [App\Http\Controllers\Company\Admin\EventController::class, 'report'])->name('company.events.report');
+    Route::get('/events/{id}/report', [EventController::class, 'report'])->name('company.events.report');
+
 });
 
 require __DIR__.'/auth.php';
